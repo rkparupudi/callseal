@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bank voice agent (simulated) - CallSeal</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+  .state { font-size: 20px; font-weight: 700; }
+  pre { background: #f4f5f7; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+  button { padding: 10px 16px; font-size: 15px; }
+</style>
+</head>
+<body>
+<h1>Bank voice agent (simulated)</h1>
+<p>Stands in for a real voice agent (LiveKit, Pipecat, Vapi...). It reads the intent with the bank's
+OAuth token and speaks the code with the browser's speech engine. Opened from <code>scripts/demo.sh</code>.</p>
+<p>Intent state: <span class="state" id="state">-</span></p>
+<button id="start">Start call</button>
+<pre id="log"></pre>
+
+<script>
+// Values arrive in the URL fragment (#...), which browsers never send to the server.
+const params = new URLSearchParams(location.hash.slice(1));
+const intentId = params.get('intent'), code = params.get('code'), token = params.get('token');
+const logEl = document.getElementById('log'), stateEl = document.getElementById('state');
+let lastState = null, started = false;
+
+function log(line) { logEl.textContent += line + '\n'; }
+function say(text) {
+  log('Agent: ' + text);
+  if ('speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+}
+
+async function poll() {
+  const res = await fetch(`/v1/call-intents/${intentId}`, { headers: { Authorization: 'Bearer ' + token } });
+  const state = res.ok ? (await res.json()).state : 'EXPIRED';
+  stateEl.textContent = state;
+  if (started && state !== lastState) {
+    if (state === 'VERIFIED') say('Thank you for confirming. Now, about your account...');
+    if (state === 'REPORTED') say('Understood. We are ending this call. Please contact us through the app if you need anything.');
+    if (state === 'EXPIRED') say('This call can no longer be verified. Please call us back on the number in your app.');
+  }
+  lastState = state;
+  if (state === 'CREATED' || state === 'NOTIFIED') setTimeout(poll, 1500);
+}
+
+document.getElementById('start').onclick = () => {
+  if (!intentId || !code || !token) { log('Missing intent, code or token in the URL. Run scripts/demo.sh.'); return; }
+  started = true;
+  const words = code.split('-').join(' ');
+  say(`Hello, this is Demo Bank's assistant. To confirm it is really us, your Demo Bank app now shows the words: ${words}. ` +
+      `If you see them, tap "genuine". We will never ask you to read anything out.`);
+};
+
+if (intentId) poll(); else log('Open this page from the link printed by scripts/demo.sh.');
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: callseal
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/callseal
+    username: callseal
+    password: ${DB_PASSWORD:callseal}
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    distribution:
+      percentiles-histogram:
+        callseal: true
+
+callseal:
+  intent-ttl: 5m
+  # Local-demo defaults only. Override with environment variables anywhere else.
+  code-pepper: ${CALLSEAL_CODE_PEPPER:local-demo-pepper-change-me}
+  demo-bank:
+    client-id: demo-bank
+    client-secret: ${DEMO_BANK_SECRET:demo-secret}
+    display-name: Demo Bank

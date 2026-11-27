@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Bank app - CallSeal</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f5f7; margin: 0; display: flex; justify-content: center; }
+  .phone { width: 360px; min-height: 640px; background: #fff; margin: 24px; border-radius: 24px; box-shadow: 0 2px 12px rgba(0,0,0,.12); padding: 24px; box-sizing: border-box; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .muted { color: #5f6368; font-size: 13px; }
+  .card { border: 2px solid #1a73e8; border-radius: 16px; padding: 16px; margin-top: 24px; }
+  .code { font-size: 28px; font-weight: 700; letter-spacing: 2px; margin: 12px 0; text-align: center; }
+  .warn { background: #fff4e5; border-radius: 8px; padding: 8px; font-size: 13px; font-weight: 600; }
+  button { width: 100%; padding: 12px; margin-top: 8px; font-size: 15px; border-radius: 10px; border: 0; cursor: pointer; }
+  .ok { background: #1e8e3e; color: #fff; }
+  .bad { background: #d93025; color: #fff; }
+  .idle { margin-top: 32px; text-align: center; color: #5f6368; }
+  input { padding: 6px; width: 140px; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <h1>Demo Bank</h1>
+  <div class="muted">Signed in as <input id="customer" value="cust-001"> <button id="connect" style="width:auto;padding:6px 10px">Connect</button></div>
+  <div id="status" class="muted" style="margin-top:8px">Not connected</div>
+  <div id="slot"><div class="idle">No call from your bank right now.<br>If someone calls claiming to be us, it's not us.</div></div>
+</div>
+
+<script>
+// DEMO ONLY: the customer id stands in for a real authenticated app session.
+const slot = document.getElementById('slot');
+const statusEl = document.getElementById('status');
+let source;
+
+const purposeText = {
+  EMI_REMINDER: 'your EMI payment', KYC_UPDATE: 'updating your KYC',
+  FRAUD_ALERT: 'a possible fraud on your account', OTHER: 'your account'
+};
+
+function idle(message) {
+  slot.innerHTML = '<div class="idle"></div>';
+  slot.firstChild.textContent = message || "No call from your bank right now.";
+}
+
+function showCard(card) {
+  slot.innerHTML = `
+    <div class="card">
+      <div class="muted">Incoming call, verified by CallSeal</div>
+      <div style="font-weight:600;margin-top:4px" id="who"></div>
+      <div class="code" id="code"></div>
+      <div class="warn">Your bank will SAY these words. Never read them out to anyone.</div>
+      <button class="ok" id="genuine">They said it. This call is genuine</button>
+      <button class="bad" id="report">Report this call</button>
+    </div>`;
+  document.getElementById('who').textContent = `${card.bankName} is calling about ${purposeText[card.purpose] || 'your account'}`;
+  document.getElementById('code').textContent = card.spokenCode.replace('-', ' ');
+  document.getElementById('genuine').onclick = () => answer(card.intentId, 'GENUINE');
+  document.getElementById('report').onclick = () => answer(card.intentId, 'REPORTED');
+}
+
+async function answer(intentId, verdict) {
+  const res = await fetch(`/demo/call-intents/${intentId}/verdict`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customerRef: document.getElementById('customer').value, verdict })
+  });
+  const body = await res.json();
+  idle(res.ok
+    ? (verdict === 'GENUINE' ? 'Thanks. You can continue the call.' : 'Reported. The call will be ended. You can block this number too.')
+    : (body.detail || 'Something went wrong.'));
+}
+
+document.getElementById('connect').onclick = () => {
+  if (source) source.close();
+  const customer = encodeURIComponent(document.getElementById('customer').value);
+  source = new EventSource(`/demo/customers/${customer}/pending-calls`);
+  source.onopen = () => statusEl.textContent = 'Connected. Waiting for calls.';
+  source.onerror = () => statusEl.textContent = 'Connection lost. Retrying...';
+  source.addEventListener('call', e => showCard(JSON.parse(e.data)));
+};
+</script>
+</body>
+</html>
