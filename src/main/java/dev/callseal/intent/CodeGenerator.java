@@ -2,6 +2,7 @@ package dev.callseal.intent;
 
 import dev.callseal.common.Hashing;
 import dev.callseal.config.CallSealProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +27,7 @@ public class CodeGenerator {
     private final List<String> words;
     private final String pepper;
 
+    @Autowired // two constructors: tell Spring which one to use
     public CodeGenerator(CallSealProperties props) {
         this(loadWords(), props.codePepper());
     }
